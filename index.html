@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="favicon.ico" type="image/x-icon">
+<title>临时邮箱 | XZ</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:system-ui,sans-serif}
+body{background:#111;color:#fff;padding:24px;max-width:900px;margin:0 auto}
+.logo{font-size:48px;font-weight:bold;margin-bottom:24px}
+.box{background:#222;border-radius:12px;padding:20px;margin-bottom:16px}
+.email-row{display:flex;gap:8px;flex-wrap:wrap}
+#mail-address{flex:1;padding:10px;border-radius:6px;border:none;font-size:16px}
+button{padding:10px 16px;border:none;border-radius:6px;background:#fff;color:#111;font-weight:bold;cursor:pointer}
+#inbox{margin-top:20px}
+.mail-item{background:#333;padding:14px;border-radius:8px;margin-bottom:8px;cursor:pointer}
+.mail-item:hover{background:#444}
+.mail-content{margin-top:12px;padding:16px;background:#2a2a2a;border-radius:8px;white-space:pre-wrap;display:none}
+.tip{color:#aaa;margin:12px 0;font-size:14px}
+</style>
+</head>
+<body>
+<div class="logo">XZ™ 临时邮箱</div>
+<div class="box">
+    <p class="tip">临时邮箱，用于接收验证码，请勿接收重要邮件</p>
+    <div class="email-row">
+        <input id="mail-address" readonly placeholder="正在生成邮箱...">
+        <button id="copy-btn">复制地址</button>
+        <button id="refresh-btn">刷新收件箱</button>
+    </div>
+</div>
+<div class="box" id="inbox">
+    <h3>📥 收件箱</h3>
+    <div id="mail-list"></div>
+</div>
+
+<script>
+let mailBox = "";
+let mailDomain = "";
+const api = "https://www.1secmail.com/api/v1/";
+
+// 生成随机邮箱
+async function createMail(){
+    const res = await fetch(`${api}?action=genRandomMailbox&count=1`);
+    const arr = await res.json();
+    const full = arr[0].split("@");
+    mailBox = full[0];
+    mailDomain = full[1];
+    document.getElementById("mail-address").value = `${mailBox}@${mailDomain}`;
+    loadInbox();
+}
+
+// 加载收件列表
+async function loadInbox(){
+    const listDom = document.getElementById("mail-list");
+    listDom.innerHTML = "<p>加载中...</p>";
+    try{
+        const res = await fetch(`${api}?action=getMessages&login=${mailBox}&domain=${mailDomain}`);
+        const data = await res.json();
+        if(data.length === 0){
+            listDom.innerHTML = "<p class='tip'>暂无邮件，等待他人发送</p>";
+            return;
+        }
+        listDom.innerHTML = "";
+        for(let mail of data){
+            const item = document.createElement("div");
+            item.className = "mail-item";
+            item.innerHTML = `
+                <div>发件人：${mail.from}</div>
+                <div>标题：${mail.subject || "无标题"}</div>
+                <div class="mail-content" data-id="${mail.id}">加载正文...</div>
+            `;
+            item.onclick = async ()=>{
+                const contentDom = item.querySelector(".mail-content");
+                if(contentDom.style.display === "block"){
+                    contentDom.style.display = "none";
+                    return;
+                }
+                const detail = await fetch(`${api}?action=readMessage&login=${mailBox}&domain=${mailDomain}&id=${mail.id}`);
+                const detailData = await detail.json();
+                contentDom.innerText = detailData.text || detailData.body || "无文本内容";
+                contentDom.style.display = "block";
+            }
+            listDom.appendChild(item);
+        }
+    }catch(e){
+        listDom.innerHTML = "<p>接口加载失败，请稍后刷新</p>";
+    }
+}
+
+// 复制邮箱
+document.getElementById("copy-btn").onclick = ()=>{
+    const val = document.getElementById("mail-address").value;
+    navigator.clipboard.writeText(val).then(()=>alert("复制成功"));
+}
+// 刷新收件箱
+document.getElementById("refresh-btn").onclick = loadInbox;
+
+// 页面初始化
+createMail();
+// 自动定时刷新 30秒
+setInterval(loadInbox, 30000);
+</script>
+</body>
+</html>
