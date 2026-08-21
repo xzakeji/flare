@@ -38,13 +38,14 @@ button{padding:10px 16px;border:none;border-radius:6px;background:#fff;color:#11
 <script>
 let account = null;
 let token = "";
-const API = "https://api.mail.tm";
+// 已替换为你的Worker地址
+const WORKER_API = "https://ceshi.nameiszcy.workers.dev";
 
 // 创建账号
 async function createMail() {
     try {
         // 获取可用域名
-        const domainRes = await fetch(`${API}/domains`);
+        const domainRes = await fetch(`${WORKER_API}/domains`);
         const domainData = await domainRes.json();
         const domain = domainData["hydra:member"][0].domain;
         // 随机用户名
@@ -52,14 +53,14 @@ async function createMail() {
         const email = `${username}@${domain}`;
         const password = Math.random().toString(36).slice(2,12);
         // 注册邮箱
-        const registerRes = await fetch(`${API}/accounts`, {
+        const registerRes = await fetch(`${WORKER_API}/accounts`, {
             method:"POST",
             headers:{"Content-Type":"application/json"},
             body:JSON.stringify({address:email,password:password})
         });
         account = await registerRes.json();
         // 获取token
-        const loginRes = await fetch(`${API}/token`, {
+        const loginRes = await fetch(`${WORKER_API}/token`, {
             method:"POST",
             headers:{"Content-Type":"application/json"},
             body:JSON.stringify({address:email,password:password})
@@ -69,7 +70,8 @@ async function createMail() {
         document.getElementById("mail-address").value = email;
         loadInbox();
     } catch (e) {
-        document.getElementById("mail-list").innerHTML = "<p>生成失败！接口无法访问</p>";
+        document.getElementById("mail-list").innerHTML = "<p>生成失败！请检查Worker是否部署成功</p>";
+        console.error(e);
     }
 }
 
@@ -79,7 +81,7 @@ async function loadInbox() {
     if(!token) return;
     listDom.innerHTML = "<p>加载中...</p>";
     try {
-        const res = await fetch(`${API}/messages`, {
+        const res = await fetch(`${WORKER_API}/messages`, {
             headers: { "Authorization": `Bearer ${token}` }
         });
         const data = await res.json();
@@ -103,7 +105,7 @@ async function loadInbox() {
                     contentDom.style.display = "none";
                     return;
                 }
-                const detailRes = await fetch(`${API}/messages/${mail.id}`,{
+                const detailRes = await fetch(`${WORKER_API}/messages/${mail.id}`,{
                     headers: { "Authorization": `Bearer ${token}` }
                 });
                 const detail = await detailRes.json();
@@ -114,6 +116,7 @@ async function loadInbox() {
         }
     }catch(e){
         listDom.innerHTML = "<p>读取收件箱失败</p>";
+        console.error(e);
     }
 }
 
