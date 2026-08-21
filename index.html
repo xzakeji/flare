@@ -36,38 +36,64 @@ button{padding:10px 16px;border:none;border-radius:6px;background:#fff;color:#11
 </div>
 
 <script>
-let mailBox = "";
-let mailDomain = "";
-const api = "https://www.1secmail.com/api/v1/";
+let account = null;
+let token = "";
+const API = "https://api.mail.tm";
 
-// 生成随机邮箱
-async function createMail(){
-    const res = await fetch(`${api}?action=genRandomMailbox&count=1`);
-    const arr = await res.json();
-    const full = arr[0].split("@");
-    mailBox = full[0];
-    mailDomain = full[1];
-    document.getElementById("mail-address").value = `${mailBox}@${mailDomain}`;
-    loadInbox();
+// 创建账号
+async function createMail() {
+    try {
+        // 获取可用域名
+        const domainRes = await fetch(`${API}/domains`);
+        const domainData = await domainRes.json();
+        const domain = domainData["hydra:member"][0].domain;
+        // 随机用户名
+        const username = Math.random().toString(36).slice(2,10);
+        const email = `${username}@${domain}`;
+        const password = Math.random().toString(36).slice(2,12);
+        // 注册邮箱
+        const registerRes = await fetch(`${API}/accounts`, {
+            method:"POST",
+            headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({address:email,password:password})
+        });
+        account = await registerRes.json();
+        // 获取token
+        const loginRes = await fetch(`${API}/token`, {
+            method:"POST",
+            headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({address:email,password:password})
+        });
+        const loginData = await loginRes.json();
+        token = loginData.token;
+        document.getElementById("mail-address").value = email;
+        loadInbox();
+    } catch (e) {
+        document.getElementById("mail-list").innerHTML = "<p>生成失败！接口无法访问</p>";
+    }
 }
 
-// 加载收件列表
-async function loadInbox(){
+// 读取收件箱
+async function loadInbox() {
     const listDom = document.getElementById("mail-list");
+    if(!token) return;
     listDom.innerHTML = "<p>加载中...</p>";
-    try{
-        const res = await fetch(`${api}?action=getMessages&login=${mailBox}&domain=${mailDomain}`);
+    try {
+        const res = await fetch(`${API}/messages`, {
+            headers: { "Authorization": `Bearer ${token}` }
+        });
         const data = await res.json();
-        if(data.length === 0){
+        const mails = data["hydra:member"];
+        if(mails.length === 0){
             listDom.innerHTML = "<p class='tip'>暂无邮件，等待他人发送</p>";
             return;
         }
         listDom.innerHTML = "";
-        for(let mail of data){
+        for(let mail of mails){
             const item = document.createElement("div");
             item.className = "mail-item";
             item.innerHTML = `
-                <div>发件人：${mail.from}</div>
+                <div>发件人：${mail.from.address}</div>
                 <div>标题：${mail.subject || "无标题"}</div>
                 <div class="mail-content" data-id="${mail.id}">加载正文...</div>
             `;
@@ -77,15 +103,17 @@ async function loadInbox(){
                     contentDom.style.display = "none";
                     return;
                 }
-                const detail = await fetch(`${api}?action=readMessage&login=${mailBox}&domain=${mailDomain}&id=${mail.id}`);
-                const detailData = await detail.json();
-                contentDom.innerText = detailData.text || detailData.body || "无文本内容";
+                const detailRes = await fetch(`${API}/messages/${mail.id}`,{
+                    headers: { "Authorization": `Bearer ${token}` }
+                });
+                const detail = await detailRes.json();
+                contentDom.innerText = detail.text || "无文本内容";
                 contentDom.style.display = "block";
             }
             listDom.appendChild(item);
         }
     }catch(e){
-        listDom.innerHTML = "<p>接口加载失败，请稍后刷新</p>";
+        listDom.innerHTML = "<p>读取收件箱失败</p>";
     }
 }
 
@@ -97,10 +125,9 @@ document.getElementById("copy-btn").onclick = ()=>{
 // 刷新收件箱
 document.getElementById("refresh-btn").onclick = loadInbox;
 
-// 页面初始化
 createMail();
-// 自动定时刷新 30秒
-setInterval(loadInbox, 30000);
+// 30秒自动刷新
+setInterval(loadInbox,30000);
 </script>
 </body>
 </html>
